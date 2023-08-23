@@ -1,0 +1,293 @@
+---
+title: 'Survival Analysis: Employee Turnover'
+author: "Julia"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This project is a survival analysis approached towards the employee turnover according to many factors related. Survival analysis is a branch of statistics for analyzing the expected duration of time until a significant event happen. In this project, the event will be **employees quitting**
+
+# Data Preparations 
+
+## Calling all required libraries
+
+```{r, message = FALSE}
+library(survival)
+library(ranger)
+library(ggplot2)
+library(dplyr)
+library(ggfortify)
+library(readxl)
+library(MASS)
+library(ADGofTest)
+library(survminer)
+library(car)
+```
+
+## Importing the dataset
+
+This project will be using [The Employee Turnover](https://www.kaggle.com/datasets/davinwijaya/employee-turnover) dataset. 
+
+```{r}
+df=read.csv("C:/Users/HP/Downloads/turnover.csv", header = TRUE)
+head(df)
+```
+
+The data has 16 columns (variables) and 1067 rows. The variables explanation is written down below:
+
+-   `stag` = Experience (time)
+-   `event` = Employee turnover: turnover(1) or survive(0)
+-   `gender` = Employee's gender: female(f) or male(m)
+-   `age` = Employee's age (year)
+-   `industry` = Employee's Industry: Banks, PowerGeneration, Retail, manufacture, Consult, State, Building, IT, HoReCa, Telecom, Pharma, Mining, transport, Agriculture, RealEstate, etc.
+-   `profession` = Employee's profession: HR, Commercial, Marketing, Sales, BusinessDevelopment, Finance, Teaching, manage, IT, Law, Consult, Engineer, PR, Accounting, etc.
+-   `traffic` = From what pipelene employee came to the company: rabrecNErab, empjs, youjs, referal, advert, KA, recNErab, and friends
+-   `coach` = Presence of a coach (training) on probation: yes or no
+-   `head_gender` = Head (supervisor) gender: female(f) or male(m)
+-   `greywage` = The salary does not seem to the tax authorities
+-   `way` = How an employee gets to workplace (by feet, by bus etc)
+-   Big5 test scales, such as:
+    -   `extraversion`
+    -   `independ`
+    -   `selfcontrol`
+    -   `anxiety`
+    -   `novator`
+
+# Exploratory Data Analysis
+
+In exploratory data analysis, it is crucial to run tests to determine whether the distribution of the time variable follows a particular distribution before modeling the data. The Weibull Distribution is the most common distribution used in survival analysis, while the time variable follows it. Thus, we will check on  `stag` as the time variable to see if it has the Weibull distribution.  
+
+As a comparator of p-values in this project, we will use the $\alpha = 0.05$
+
+## Distribution testing
+
+```{r}
+fitdistr(df$stag, "weibull")
+```
+
+According to the result in the previous code, we obtained the Weibull Distribution parameters are:
+
+-   shape = 1.08272153
+-   scale = 37.78782884
+
+Therefore, we can continue to test the time variable using Anderson-Darling Goodness of Fit test using required parameters.
+
+```{r}
+ad.test(df$stag, pweibull, shape= 1.08272153, scale=37.78782884)
+```
+
+We obtained the p-value of 0.22 > 0.05, therefore we can conclude that the time variable is following The Weibull Distribution.
+
+## Kaplan-Meier Estimation and Log-Rank Test for The Categorical Variables
+
+There are `gender`, `industry`, `profression`, `traffic`, `coach`, `head_gender`, `greywage`, and `way` as the categorical variables. The Kaplan-Meier Estimation Curve in survival analysis allows us to evaluate how each category of survival probability differs from the others. To determine the difference between each category based on the curve we will receive, we will thus use The Kaplan Meier Estimation. We will run the Log-Rank test to ensure if there is a difference between the categories of the variables.
+  
+### Gender
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `gender`.
+
+```{r}
+km_gender<-survfit(Surv(stag, event)~gender, data = df, type="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+
+```{r}
+ggsurvplot(km_gender, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           legend.labs = c("female", "male"),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Gender")
+```
+
+The Kaplan-Meier curve shown above shows that female workers have a higher survival probability than male workers.
+  
+Since we achieved the p-value of 0.13 > 0.05, we can say that there is no significant distinction between the survival probabilities of each `gender`.
+
+### Industry
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `industry`.
+
+```{r}
+km_industry<-survfit(Surv(stag, event)~industry, data = df, type ="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+
+```{r}
+ggsurvplot(km_industry, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Industry")
+```
+
+The Kaplan-Meier curve shown above demonstrates that employees in the retail industry have the highest chance of surviving. Workers in the agricultural industry, however, have the lowest chances of surviving.
+  
+Since we achieved the p-value < 0.05, we can say that there is significant distinction between the survival probabilities of each `industry`.
+
+### Profession
+
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `profession`.
+```{r}
+km_profession<-survfit(Surv(stag, event)~profession, data = df, type="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+```{r}
+ggsurvplot(km_profession, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Profession")
+```
+
+The Kaplan-Meier curve shown above shows that employees in the HR profession have the highest chance of surviving. Workers in the law profession, on the other hand, have the lowest chances of surviving.
+  
+Since we achieved the p-value of 0.0087 < 0.05, we can say that there is significant distinction between the survival probabilities of each `profession`.
+
+### Traffic
+
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `traffic`.
+```{r}
+km_traffic<-survfit(Surv(stag, event)~traffic, data= df, type="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+```{r}
+ggsurvplot(km_traffic, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Traffic")
+```
+Workers from the 'traffic' of KA have the highest probability of surviving, as shown by the Kaplan-Meier curve above. Workers from the "traffic" of friends, on the other hand, have the lowest chance of surviving. 
+  
+Since we achieved the p-value of 0.001 < 0.05, we can say that there is significant distinction between the survival probabilities of each category of `traffic`.
+
+### Coach
+
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `coach`.
+```{r}
+km_coach<-survfit(Surv(stag, event)~coach, data = df, type="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+```{r}
+ggsurvplot(km_coach, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Coach")
+```
+
+The workers from the 'coach' of no have the highest chance of surviving, as shown by the Kaplan-Meier curve above. Workers from the 'coach' of yes, on the other hand, have the lowest chance of surviving. 
+
+Since we achieved the p-value of 0.19 > 0.05, we can say that there is no significant distinction between the survival probabilities of each category of `coach`.
+
+### Head Gender
+
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `head_gender`.
+```{r}
+km_headgender<-survfit(Surv(stag, event)~head_gender, data= df, type="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+```{r}
+ggsurvplot(km_headgender, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           legend.labs = c("female", "male"),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Head Gender")
+```
+
+We can observe from the Kaplan-Meier estimator that workers with a female head_gender have a higher chance of surviving than those with a male head_gender. 
+  
+Since we achieved the p-value of 0.27 > 0.05, we can say that there is no significant distinction between the survival probabilities of `head_gender`.
+
+### Greywage
+
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `greywage`.
+```{r}
+km_greywage<-survfit(Surv(stag, event)~greywage, data = df, type ="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+```{r}
+ggsurvplot(km_greywage, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           legend.labs = c("grey", "white"),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Greywage")
+```
+
+The Kaplan-Meier estimate shown above shows that workers with the 'greywage' of white have a higher likelihood of surviving than those with the 'greywage' of grey.  
+
+Since we achieved the p-value of 0.0001 < 0.05, we can say that there is significant distinction between the survival probabilities of `greywage`.
+
+### Way
+
+By running the following code, we will first perform the Kaplan-Meier estimation according to the `way`.
+```{r}
+km_way<-survfit(Surv(stag, event)~way,
+                data= df,
+                type="kaplan-meier")
+```
+
+When the code above is run, the code below can be used to display the Kaplan-Meier estimation curve.
+```{r}
+ggsurvplot(km_way, data=df,
+           conf.int = FALSE,
+           ggtheme = theme_minimal(),
+           legend.labs=c("bus", "car", "foot"),
+           pval = TRUE,
+           pval.method = TRUE)+
+  ggtitle("Survival curve based on Commuters(way)")
+```
+Workers who take the bus to work have the best chance of surviving, as seen by the Kaplan-Meier curve above. On the other hand, those who commute to work by car have the lowest chance of surviving.  
+
+Since we achieved the p-value of 0.003 < 0.05, we can say that there is significant distinction between the survival probabilities of `way`.
+
+# Data Modelling  
+
+We will first use the Weibull regression model to create the main model for the data, which will incorporate all independent variables. 
+```{r}
+model0<-survreg(Surv(stag, event)~.,
+                 data = df, dist = "weibull")
+```
+
+We can focus the model using the independent variable that has the greatest influence from the main model. It's possible that the primary model we find didn't accurately capture the factors that had the greatest impact on the employees' survival. As a result, we will execute the code below, which will produce a list of all possible combinations of independent variables together with their AIC values. The best appropriate model that we can use will be indicated by the AIC number itself. 
+```{r}
+step(model0)
+```
+
+The model including independent variables like `age`, `industry`, `profession`, `traffic`, `greywage`, `self-control`, and `anxiety` produced the best accurate survival model, according to the abovementioned result. As a result, we will incorporate these variables into the new model. 
+```{r}
+model1<-survreg(Surv(stag, event)~age + industry + profession + traffic + greywage + way + selfcontrol + anxiety,
+                data = df,
+                dist = "weibull")
+summary(model1)
+```
+
+The hazard ratio compares event rates to determine the proportional risk of the complication. Run the code below to obtain the hazard ratio. 
+```{r}
+hr=exp(model1$coefficients)
+hr
+```
+
+
+
